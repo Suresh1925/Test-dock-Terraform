@@ -2,19 +2,25 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = "~> 3.0"
+    }
+    docker = {
+      source  = "kreuzwerker/docker"
+      version = "~> 2.12"
     }
   }
 }
 
-# Configure the AWS Provider
 provider "aws" {
   region = "us-east-1"
 }
 
+provider "docker" {
+  host = "tcp://localhost:2375"
+}
+
 resource "aws_vpc" "dock_vpc" {
-  cidr_block       = "10.0.0.0/16"
-  instance_tenancy = "default"
+  cidr_block = "10.0.0.0/16"
 
   tags = {
     Name = "dock_vpc"
@@ -23,7 +29,7 @@ resource "aws_vpc" "dock_vpc" {
 
 resource "aws_subnet" "dock_subnet" {
   vpc_id            = aws_vpc.dock_vpc.id
-  cidr_block        = "10.0.0.0/16"
+  cidr_block        = "10.0.1.0/24"
   availability_zone = "us-east-1a"
 
   tags = {
@@ -59,21 +65,21 @@ resource "aws_route_table_association" "associate_dock_route_table" {
 
 resource "aws_security_group" "dock_sg" {
   name        = "dock_sg"
-  description = "Allow TLS inbound traffic"
+  description = "Allow traffic for Docker"
   vpc_id      = aws_vpc.dock_vpc.id
 
   ingress {
-    description = "TLS from VPC"
-    from_port   = 22
-    to_port     = 22
+    description = "Allow HTTP traffic"
+    from_port   = 80
+    to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
   ingress {
-    description = "TLS from VPC"
-    from_port   = 80
-    to_port     = 80
+    description = "Allow SSH traffic"
+    from_port   = 22
+    to_port     = 22
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -91,13 +97,21 @@ resource "aws_security_group" "dock_sg" {
 }
 
 resource "aws_instance" "dock_server_Dev" {
-
-  ami                           = "ami-080e1f13689e07408"
-  instance_type                 = "t2.micro"
-  subnet_id                     = aws_subnet.dock_subnet.id
-  vpc_security_group_ids        = [aws_security_group.dock_sg.id]
+  ami                    = "ami-080e1f13689e07408"
+  instance_type          = "t2.micro"
+  subnet_id              = aws_subnet.dock_subnet.id
+  vpc_security_group_ids = [aws_security_group.dock_sg.id]
 
   tags = {
     Name = "dock_server_Dev"
+  }
+}
+
+resource "docker_container" "my_container" {
+  name  = "my-container"
+  image = "nginx:latest"
+  ports {
+    internal = 80
+    external = 8080
   }
 }
